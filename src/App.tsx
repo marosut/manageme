@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { supabase } from "./lib/supabase";
 
 type ScheduleItem = {
   id: string;
@@ -41,7 +42,9 @@ type AppData = {
   routines: RoutineItem[];
 };
 
-const STORAGE_KEY = "juwan-schedule-app-v1";
+type UserInfo = {
+  id: string;
+};
 
 const kstDate = (date = new Date()) => {
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
@@ -73,11 +76,8 @@ const defaultData: AppData = {
 export default function App() {
   const today = kstDate();
   const [selectedDate, setSelectedDate] = useState(today);
-
-  const [data, setData] = useState<AppData>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : defaultData;
-  });
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [data, setData] = useState<AppData>(defaultData);
 
   const [scheduleForm, setScheduleForm] = useState({
     startTime: "",
@@ -91,13 +91,241 @@ export default function App() {
   const [routineName, setRoutineName] = useState("");
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data]);
+    const loadUserAndData = async () => {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        console.error("getUser error:", userError);
+        return;
+      }
 
-  const schedules = data.schedules
-    .filter((s) => s.date === selectedDate)
-    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      if (!userData?.user) {
+        console.error("No logged in user found.");
+        return;
+      }
 
+      const currentUser = { id: userData.user.id };
+      setUser(currentUser);
+      await fetchUserData(currentUser.id);
+    };
+
+    loadUserAndData();
+  }, []);
+
+  const fetchUserData = async (userId: string) => {
+    const schedulesResult = await supabase
+      .from<ScheduleItem & { user_id: string }>("schedules")
+      .select("id,date,startTime,endTime,title,category,memo")
+      .eq("user_id", userId)
+      .order("startTime", { ascending: true });
+
+    const todosResult = await supabase
+      .from<TodoItem & { user_id: string }>("todos")
+      .select("id,date,text,completed")
+      .eq("user_id", userId)
+      .order("date", { ascending: true });
+
+    if (schedulesResult.error) {
+      console.error("schedules select error:", schedulesResult.error);
+    }
+    if (todosResult.error) {
+      console.error("todos select error:", todosResult.error);
+    }
+
+    setData((prev) => ({
+      ...prev,
+      schedules: schedulesResult.data ?? [],
+      todos: todosResult.data ?? [],
+    }));
+  };
+
+  const addSchedule = async () => {
+    if (!user) {
+      console.error("No Supabase user available for schedule insert.");
+      return;
+    }
+
+    if (!scheduleForm.startTime || !scheduleForm.endTime || !scheduleForm.title.trim()) return;
+
+    const { data: inserted, error } = await supabase
+      .from<ScheduleItem & { user_id: string }>("schedules")
+      .insert([
+        {
+          user_id: user.id,
+          date: selectedDate,
+          startTime: scheduleForm.startTime,
+          endTime: scheduleForm.endTime,
+          title: scheduleForm.title,
+          category: scheduleForm.category,
+          memo: scheduleForm.memo,
+        },
+      ])
+      .select("id,date,startTime,endTime,title,category,memo")
+      .single();
+
+    if (error) {
+      console.error("schedule insert error:", error);
+      return;
+    }
+
+    if (inserted) {
+      setData((prev) => ({
+        ...prev,
+        schedules: [...prev.schedules, inserted],
+      }));
+      setScheduleForm({ startTime: "", endTime: "", title: "", category: "", memo: "" });
+    }
+  };
+
+  const deleteSchedule = async (scheduleId: string) => {
+    if (!user) {
+      console.error("No Supabase user available for schedule delete.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("schedules")
+      .delete()
+      .eq("id", scheduleId)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("schedule delete error:", error);
+      return;
+    }
+
+    setData((prev) => ({
+      ...prev,
+      schedules: prev.schedules.filter((s) => s.id !== scheduleId),
+    }));
+  };
+
+  const addTodo = async () => {
+    if (!user) {
+      console.error("No Supabase user available for todo insert.");
+      return;
+    }
+
+    if (!todoText.trim()) return;
+
+    const { data: inserted, error } = await supabase
+      .from<TodoItem & { user_id: string }>("todos")
+      .insert([
+        {
+          user_id: user.id,
+          date: selectedDate,
+          text: todoText,
+          completed: false,
+        },
+      ])
+      .select("id,date,text,completed")
+      .single();
+
+    if (error) {
+      console.error("todo insert error:", error);
+      return;
+    }
+
+    if (inserted) {
+      setData((prev) => ({
+        ...prev,
+        todos: [...prev.todos, inserted],
+      }));
+      setTodoText("");
+    }
+  };
+
+  const toggleTodo = async (todoId: string) => {
+    if (!user) {
+      console.error("No Supabase user available for todo update.");
+      return;
+    }
+
+    const currentTodo = data.todos.find((todo) => todo.id === todoId);
+    if (!currentTodo) return;
+
+    const { data: updated, error } = await supabase
+      .from<TodoItem & { user_id: string }>("todos")
+      .update({ completed: !currentTodo.completed })
+      .eq("id", todoId)
+      .eq("user_id", user.id)
+      .select("id,date,text,completed")
+      .single();
+
+    if (error) {
+      console.error("todo update error:", error);
+      return;
+    }
+
+    if (updated) {
+      setData((prev) => ({
+        ...prev,
+        todos: prev.todos.map((t) => (t.id === todoId ? updated : t)),
+      }));
+    }
+  };
+
+  const deleteTodo = async (todoId: string) => {
+    if (!user) {
+      console.error("No Supabase user available for todo delete.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("todos")
+      .delete()
+      .eq("id", todoId)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("todo delete error:", error);
+      return;
+    }
+
+    setData((prev) => ({
+      ...prev,
+      todos: prev.todos.filter((t) => t.id !== todoId),
+    }));
+  };
+
+  const addRoutine = () => {
+    if (!routineName.trim()) return;
+
+    setData((prev) => ({
+      ...prev,
+      routines: [
+        ...prev.routines,
+        { id: id(), name: routineName, createdAt: selectedDate, completions: {} },
+      ],
+    }));
+
+    setRoutineName("");
+  };
+
+  const toggleRoutine = (routineId: string) => {
+    setData((prev) => ({
+      ...prev,
+      routines: prev.routines.map((r) =>
+        r.id === routineId
+          ? {
+              ...r,
+              completions: {
+                ...r.completions,
+                [selectedDate]: !r.completions[selectedDate],
+              },
+            }
+          : r
+      ),
+    }));
+  };
+
+  const deleteRoutine = (routineId: string) => {
+    setData((prev) => ({
+      ...prev,
+      routines: prev.routines.filter((r) => r.id !== routineId),
+    }));
+  };
+
+  const schedules = data.schedules.filter((s) => s.date === selectedDate);
   const todos = data.todos.filter((t) => t.date === selectedDate);
   const routines = data.routines.filter((r) => r.createdAt <= selectedDate);
 
@@ -147,87 +375,6 @@ export default function App() {
     });
   })();
 
-  const addSchedule = () => {
-    if (!scheduleForm.startTime || !scheduleForm.endTime || !scheduleForm.title.trim()) return;
-
-    setData((prev) => ({
-      ...prev,
-      schedules: [...prev.schedules, { id: id(), date: selectedDate, ...scheduleForm }],
-    }));
-
-    setScheduleForm({ startTime: "", endTime: "", title: "", category: "", memo: "" });
-  };
-
-  const deleteSchedule = (scheduleId: string) => {
-    setData((prev) => ({
-      ...prev,
-      schedules: prev.schedules.filter((s) => s.id !== scheduleId),
-    }));
-  };
-
-  const addTodo = () => {
-    if (!todoText.trim()) return;
-
-    setData((prev) => ({
-      ...prev,
-      todos: [...prev.todos, { id: id(), date: selectedDate, text: todoText, completed: false }],
-    }));
-
-    setTodoText("");
-  };
-
-  const toggleTodo = (todoId: string) => {
-    setData((prev) => ({
-      ...prev,
-      todos: prev.todos.map((t) => (t.id === todoId ? { ...t, completed: !t.completed } : t)),
-    }));
-  };
-
-  const deleteTodo = (todoId: string) => {
-    setData((prev) => ({
-      ...prev,
-      todos: prev.todos.filter((t) => t.id !== todoId),
-    }));
-  };
-
-  const addRoutine = () => {
-    if (!routineName.trim()) return;
-
-    setData((prev) => ({
-      ...prev,
-      routines: [
-        ...prev.routines,
-        { id: id(), name: routineName, createdAt: selectedDate, completions: {} },
-      ],
-    }));
-
-    setRoutineName("");
-  };
-
-  const toggleRoutine = (routineId: string) => {
-    setData((prev) => ({
-      ...prev,
-      routines: prev.routines.map((r) =>
-        r.id === routineId
-          ? {
-              ...r,
-              completions: {
-                ...r.completions,
-                [selectedDate]: !r.completions[selectedDate],
-              },
-            }
-          : r
-      ),
-    }));
-  };
-
-  const deleteRoutine = (routineId: string) => {
-    setData((prev) => ({
-      ...prev,
-      routines: prev.routines.filter((r) => r.id !== routineId),
-    }));
-  };
-
   return (
     <main className="min-h-screen bg-slate-100 p-4 md:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -236,6 +383,11 @@ export default function App() {
             <div>
               <h1 className="text-3xl font-black">김주완 스케줄</h1>
               <p className="mt-2 text-slate-300">KST 기준 오늘 날짜: {kstTodayText()}</p>
+              {!user && (
+                <p className="mt-2 text-sm text-amber-300">
+                  로그인된 사용자를 불러오는 중이거나 로그인 필요합니다.
+                </p>
+              )}
             </div>
 
             <div>
