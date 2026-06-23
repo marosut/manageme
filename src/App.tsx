@@ -77,7 +77,12 @@ export default function App() {
   const today = kstDate();
   const [selectedDate, setSelectedDate] = useState(today);
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [data, setData] = useState<AppData>(defaultData);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [data, setData] = useState<any>({
+    schedules: [],
+    todos: [],
+    routines: defaultData.routines,
+  });
 
   const [scheduleForm, setScheduleForm] = useState({
     startTime: "",
@@ -92,19 +97,21 @@ export default function App() {
 
   useEffect(() => {
     const loadUserAndData = async () => {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError) {
-        console.error("getUser error:", userError);
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error("getSession error:", sessionError);
+        setAuthError("로그인 정보를 가져오는 중 오류가 발생했습니다.");
         return;
       }
 
-      if (!userData?.user) {
+      const currentUser = sessionData?.session?.user;
+      if (!currentUser) {
         console.error("No logged in user found.");
+        setAuthError("로그인이 필요합니다.");
         return;
       }
 
-      const currentUser = { id: userData.user.id };
-      setUser(currentUser);
+      setUser({ id: currentUser.id });
       await fetchUserData(currentUser.id);
     };
 
@@ -113,13 +120,13 @@ export default function App() {
 
   const fetchUserData = async (userId: string) => {
     const schedulesResult = await supabase
-      .from<ScheduleItem & { user_id: string }>("schedules")
+      .from("schedules")
       .select("id,date,startTime,endTime,title,category,memo")
       .eq("user_id", userId)
       .order("startTime", { ascending: true });
 
     const todosResult = await supabase
-      .from<TodoItem & { user_id: string }>("todos")
+      .from("todos")
       .select("id,date,text,completed")
       .eq("user_id", userId)
       .order("date", { ascending: true });
@@ -147,7 +154,7 @@ export default function App() {
     if (!scheduleForm.startTime || !scheduleForm.endTime || !scheduleForm.title.trim()) return;
 
     const { data: inserted, error } = await supabase
-      .from<ScheduleItem & { user_id: string }>("schedules")
+      .from("schedules")
       .insert([
         {
           user_id: user.id,
@@ -208,7 +215,7 @@ export default function App() {
     if (!todoText.trim()) return;
 
     const { data: inserted, error } = await supabase
-      .from<TodoItem & { user_id: string }>("todos")
+      .from("todos")
       .insert([
         {
           user_id: user.id,
@@ -244,7 +251,7 @@ export default function App() {
     if (!currentTodo) return;
 
     const { data: updated, error } = await supabase
-      .from<TodoItem & { user_id: string }>("todos")
+      .from("todos")
       .update({ completed: !currentTodo.completed })
       .eq("id", todoId)
       .eq("user_id", user.id)
@@ -375,6 +382,19 @@ export default function App() {
     });
   })();
 
+  if (authError) {
+    return (
+      <main className="min-h-screen bg-slate-100 p-4 md:p-8">
+        <div className="mx-auto max-w-7xl space-y-6">
+          <section className="rounded-3xl bg-white p-6 text-center shadow">
+            <h1 className="text-3xl font-black">로그인이 필요합니다.</h1>
+            <p className="mt-4 text-slate-600">{authError}</p>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-100 p-4 md:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -385,7 +405,7 @@ export default function App() {
               <p className="mt-2 text-slate-300">KST 기준 오늘 날짜: {kstTodayText()}</p>
               {!user && (
                 <p className="mt-2 text-sm text-amber-300">
-                  로그인된 사용자를 불러오는 중이거나 로그인 필요합니다.
+                  로그인된 사용자를 불러오는 중입니다...
                 </p>
               )}
             </div>

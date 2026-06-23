@@ -37,6 +37,7 @@ export const supabase = isSupabaseConfigured
       auth: {
         getSessionFromUrl: async () => ({ data: { session: null } }),
         getSession: async () => ({ data: { session: null } }),
+        getUser: async () => ({ data: { user: null }, error: null }),
         signInWithOAuth: async () => ({ error: { message: "Supabase 환경변수가 없습니다." } }),
         signOut: async () => ({ error: null }),
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
