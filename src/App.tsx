@@ -46,6 +46,10 @@ type UserInfo = {
   id: string;
 };
 
+type Schedule = any;
+type Todo = any;
+type Routine = any;
+
 const kstDate = (date = new Date()) => {
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
   return kst.toISOString().slice(0, 10);
@@ -78,11 +82,9 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [data, setData] = useState<any>({
-    schedules: [],
-    todos: [],
-    routines: defaultData.routines,
-  });
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [routines, setRoutines] = useState<Routine[]>(defaultData.routines);
 
   const [scheduleForm, setScheduleForm] = useState({
     startTime: "",
@@ -138,11 +140,8 @@ export default function App() {
       console.error("todos select error:", todosResult.error);
     }
 
-    setData((prev) => ({
-      ...prev,
-      schedules: schedulesResult.data ?? [],
-      todos: todosResult.data ?? [],
-    }));
+    setSchedules(schedulesResult.data ?? []);
+    setTodos(todosResult.data ?? []);
   };
 
   const addSchedule = async () => {
@@ -175,10 +174,7 @@ export default function App() {
     }
 
     if (inserted) {
-      setData((prev) => ({
-        ...prev,
-        schedules: [...prev.schedules, inserted],
-      }));
+      setSchedules((prev) => [...prev, inserted]);
       setScheduleForm({ startTime: "", endTime: "", title: "", category: "", memo: "" });
     }
   };
@@ -200,10 +196,7 @@ export default function App() {
       return;
     }
 
-    setData((prev) => ({
-      ...prev,
-      schedules: prev.schedules.filter((s) => s.id !== scheduleId),
-    }));
+    setSchedules((prev) => prev.filter((s) => s.id !== scheduleId));
   };
 
   const addTodo = async () => {
@@ -233,10 +226,7 @@ export default function App() {
     }
 
     if (inserted) {
-      setData((prev) => ({
-        ...prev,
-        todos: [...prev.todos, inserted],
-      }));
+      setTodos((prev) => [...prev, inserted]);
       setTodoText("");
     }
   };
@@ -247,7 +237,7 @@ export default function App() {
       return;
     }
 
-    const currentTodo = data.todos.find((todo) => todo.id === todoId);
+    const currentTodo = todos.find((todo) => todo.id === todoId);
     if (!currentTodo) return;
 
     const { data: updated, error } = await supabase
@@ -264,10 +254,7 @@ export default function App() {
     }
 
     if (updated) {
-      setData((prev) => ({
-        ...prev,
-        todos: prev.todos.map((t) => (t.id === todoId ? updated : t)),
-      }));
+      setTodos((prev) => prev.map((t) => (t.id === todoId ? updated : t)));
     }
   };
 
@@ -288,30 +275,23 @@ export default function App() {
       return;
     }
 
-    setData((prev) => ({
-      ...prev,
-      todos: prev.todos.filter((t) => t.id !== todoId),
-    }));
+    setTodos((prev) => prev.filter((t) => t.id !== todoId));
   };
 
   const addRoutine = () => {
     if (!routineName.trim()) return;
 
-    setData((prev) => ({
+    setRoutines((prev) => [
       ...prev,
-      routines: [
-        ...prev.routines,
-        { id: id(), name: routineName, createdAt: selectedDate, completions: {} },
-      ],
-    }));
+      { id: id(), name: routineName, createdAt: selectedDate, completions: {} },
+    ]);
 
     setRoutineName("");
   };
 
   const toggleRoutine = (routineId: string) => {
-    setData((prev) => ({
-      ...prev,
-      routines: prev.routines.map((r) =>
+    setRoutines((prev) =>
+      prev.map((r) =>
         r.id === routineId
           ? {
               ...r,
@@ -321,35 +301,35 @@ export default function App() {
               },
             }
           : r
-      ),
-    }));
+      )
+    );
   };
 
   const deleteRoutine = (routineId: string) => {
-    setData((prev) => ({
-      ...prev,
-      routines: prev.routines.filter((r) => r.id !== routineId),
-    }));
+    setRoutines((prev) => prev.filter((r) => r.id !== routineId));
   };
 
-  const schedules = data.schedules.filter((s) => s.date === selectedDate);
-  const todos = data.todos.filter((t) => t.date === selectedDate);
-  const routines = data.routines.filter((r) => r.createdAt <= selectedDate);
+  const schedulesForDate = schedules
+    .filter((s: Schedule) => s.date === selectedDate)
+    .sort((a: Schedule, b: Schedule) => a.startTime.localeCompare(b.startTime));
+
+  const todosForDate = todos.filter((t: Todo) => t.date === selectedDate);
+  const routinesForDate = routines.filter((r: Routine) => r.createdAt <= selectedDate);
 
   const achievement = useMemo(() => {
-    const doneTodos = todos.filter((t) => t.completed).length;
-    const doneRoutines = routines.filter((r) => r.completions[selectedDate]).length;
+    const doneTodos = todosForDate.filter((t: Todo) => t.completed).length;
+    const doneRoutines = routinesForDate.filter((r: Routine) => r.completions[selectedDate]).length;
 
-    const todoRate = todos.length ? Math.round((doneTodos / todos.length) * 100) : 0;
-    const routineRate = routines.length ? Math.round((doneRoutines / routines.length) * 100) : 0;
-    const totalRate = todos.length || routines.length ? Math.round((todoRate + routineRate) / 2) : 0;
+    const todoRate = todosForDate.length ? Math.round((doneTodos / todosForDate.length) * 100) : 0;
+    const routineRate = routinesForDate.length ? Math.round((doneRoutines / routinesForDate.length) * 100) : 0;
+    const totalRate = todosForDate.length || routinesForDate.length ? Math.round((todoRate + routineRate) / 2) : 0;
 
     return { doneTodos, doneRoutines, todoRate, routineRate, totalRate };
-  }, [todos, routines, selectedDate]);
+  }, [todosForDate, routinesForDate, selectedDate]);
 
   const rateByDate = (date: string) => {
-    const dayTodos = data.todos.filter((t) => t.date === date);
-    const dayRoutines = data.routines.filter((r) => r.createdAt <= date);
+    const dayTodos = todos.filter((t: Todo) => t.date === date);
+    const dayRoutines = routines.filter((r: Routine) => r.createdAt <= date);
 
     const todoRate = dayTodos.length
       ? Math.round((dayTodos.filter((t) => t.completed).length / dayTodos.length) * 100)
@@ -430,8 +410,8 @@ export default function App() {
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
-              <Info label="할 일 완료" value={`${achievement.doneTodos}/${todos.length}`} />
-              <Info label="루틴 완료" value={`${achievement.doneRoutines}/${routines.length}`} />
+              <Info label="할 일 완료" value={`${achievement.doneTodos}/${todosForDate.length}`} />
+              <Info label="루틴 완료" value={`${achievement.doneRoutines}/${routinesForDate.length}`} />
               <Info label="할 일 완료율" value={`${achievement.todoRate}%`} />
               <Info label="루틴 완료율" value={`${achievement.routineRate}%`} />
             </div>
@@ -451,7 +431,7 @@ export default function App() {
             </div>
 
             <div className="mt-4 space-y-2">
-              {todos.map((todo) => (
+              {todosForDate.map((todo: Todo) => (
                 <div key={todo.id} className="flex justify-between rounded-xl bg-slate-50 p-3">
                   <label className="flex cursor-pointer items-center gap-3">
                     <input
@@ -486,7 +466,7 @@ export default function App() {
             </div>
 
             <div className="mt-4 space-y-2">
-              {routines.map((routine) => (
+              {routinesForDate.map((routine: Routine) => (
                 <div key={routine.id} className="flex justify-between rounded-xl bg-slate-50 p-3">
                   <label className="flex cursor-pointer items-center gap-3">
                     <input
@@ -552,7 +532,7 @@ export default function App() {
             />
 
             <div className="mt-4 space-y-3">
-              {schedules.map((s) => (
+              {schedulesForDate.map((s: Schedule) => (
                 <div key={s.id} className="rounded-2xl border bg-white p-4">
                   <div className="flex justify-between gap-4">
                     <div>
