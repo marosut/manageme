@@ -99,20 +99,16 @@ export default function App() {
 
   useEffect(() => {
     const loadUserAndData = async () => {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        console.error("getSession error:", sessionError);
-        setAuthError("로그인 정보를 가져오는 중 오류가 발생했습니다.");
-        return;
-      }
+      const sessionResult = await supabase.auth.getSession();
+      const session = sessionResult.data.session;
 
-      const currentUser = sessionData?.session?.user;
-      if (!currentUser) {
+      if (!session) {
         console.error("No logged in user found.");
         setAuthError("로그인이 필요합니다.");
         return;
       }
 
+      const currentUser = session.user;
       setUser({ id: currentUser.id });
       await fetchUserData(currentUser.id);
     };
