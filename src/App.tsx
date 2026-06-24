@@ -82,6 +82,9 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [routines, setRoutines] = useState<Routine[]>(defaultData.routines);
@@ -103,18 +106,58 @@ export default function App() {
       const session = sessionResult.data.session;
 
       if (!session) {
-        console.error("No logged in user found.");
-        setAuthError("로그인이 필요합니다.");
+        setLoadingAuth(false);
         return;
       }
 
       const currentUser = session.user;
       setUser({ id: currentUser.id });
       await fetchUserData(currentUser.id);
+      setLoadingAuth(false);
     };
 
     loadUserAndData();
   }, []);
+
+  const signIn = async () => {
+    setAuthError(null);
+    const response = await supabase.auth.signInWithPassword({ email, password });
+    const session = response.data.session;
+
+    if (!session) {
+      setAuthError(response.error?.message ?? "로그인에 실패했습니다.");
+      return;
+    }
+
+    setUser({ id: session.user.id });
+    setEmail("");
+    setPassword("");
+    await fetchUserData(session.user.id);
+  };
+
+  const signUp = async () => {
+    setAuthError(null);
+    const response = await supabase.auth.signUp({ email, password });
+    const session = response.data.session;
+
+    if (!session) {
+      setAuthError(response.error?.message ?? "회원가입에 실패했습니다.");
+      return;
+    }
+
+    setUser({ id: session.user.id });
+    setEmail("");
+    setPassword("");
+    await fetchUserData(session.user.id);
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setSchedules([]);
+    setTodos([]);
+    setRoutines(defaultData.routines);
+  };
 
   const fetchUserData = async (userId: string) => {
     const schedulesResult = await supabase
@@ -358,13 +401,60 @@ export default function App() {
     });
   })();
 
-  if (authError) {
+  if (loadingAuth || !user) {
     return (
       <main className="min-h-screen bg-slate-100 p-4 md:p-8">
-        <div className="mx-auto max-w-7xl space-y-6">
-          <section className="rounded-3xl bg-white p-6 text-center shadow">
+        <div className="mx-auto max-w-md space-y-6">
+          <section className="rounded-3xl bg-white p-6 shadow">
             <h1 className="text-3xl font-black">로그인이 필요합니다.</h1>
-            <p className="mt-4 text-slate-600">{authError}</p>
+            <p className="mt-4 text-slate-600">
+              이메일과 비밀번호로 로그인하거나 회원가입하세요.
+            </p>
+
+            <div className="mt-6 space-y-4">
+              <label className="block">
+                <span className="text-sm text-slate-600">이메일</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-2 w-full rounded-xl border px-4 py-3"
+                  placeholder="example@email.com"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm text-slate-600">비밀번호</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-2 w-full rounded-xl border px-4 py-3"
+                  placeholder="비밀번호를 입력하세요"
+                />
+              </label>
+
+              {authError && (
+                <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {authError}
+                </p>
+              )}
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  onClick={signIn}
+                  className="rounded-xl bg-slate-900 px-4 py-3 text-white transition hover:bg-slate-700"
+                >
+                  로그인
+                </button>
+                <button
+                  onClick={signUp}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 transition hover:bg-slate-50"
+                >
+                  회원가입
+                </button>
+              </div>
+            </div>
           </section>
         </div>
       </main>
@@ -377,13 +467,18 @@ export default function App() {
         <header className="rounded-3xl bg-slate-900 p-6 text-white shadow">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <h1 className="text-3xl font-black">김주완 스케줄</h1>
-              <p className="mt-2 text-slate-300">KST 기준 오늘 날짜: {kstTodayText()}</p>
-              {!user && (
-                <p className="mt-2 text-sm text-amber-300">
-                  로그인된 사용자를 불러오는 중입니다...
-                </p>
-              )}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h1 className="text-3xl font-black">김주완 스케줄</h1>
+                  <p className="mt-2 text-slate-300">KST 기준 오늘 날짜: {kstTodayText()}</p>
+                </div>
+                <button
+                  onClick={signOut}
+                  className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                >
+                  로그아웃
+                </button>
+              </div>
             </div>
 
             <div>
