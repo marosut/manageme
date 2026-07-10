@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import type { TodoForm, TodoItem } from "../types/app";
 import { Card } from "./ui/Card";
 
@@ -25,14 +25,10 @@ export const TodoList = memo(function TodoList({
   onToggleTodo,
   onDeleteTodo,
 }: TodoListProps) {
-  const timedTodos = useMemo(
-    () =>
-      todos
-        .filter((todo) => todo.hasTime)
-        .sort((a, b) => (a.taskTime ?? "").localeCompare(b.taskTime ?? "")),
-    [todos]
-  );
-  const untimedTodos = useMemo(() => todos.filter((todo) => !todo.hasTime), [todos]);
+  const timedTodos = todos
+    .filter((todo) => todo.hasTime)
+    .sort((a, b) => (a.taskTime ?? "").localeCompare(b.taskTime ?? ""));
+  const untimedTodos = todos.filter((todo) => !todo.hasTime);
 
   const renderTodo = (todo: TodoItem) => (
     <div

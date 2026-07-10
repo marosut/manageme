@@ -54,11 +54,6 @@ const mapScheduleRow = (row: ScheduleRow): ScheduleItem => ({
 const sortSchedules = (items: ScheduleItem[]) =>
   [...items].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-const buildScheduleErrorMessage = (action: string, error: SupabaseResponseError) => {
-  const details = [error.message, error.details, error.hint].filter(Boolean).join("\n");
-  return `${action} failed\n${details}`;
-};
-
 const logScheduleError = (
   label: string,
   error: SupabaseResponseError,
@@ -99,7 +94,7 @@ export function useSchedules(userId: string | undefined, selectedDate: string) {
       if (!isMounted) return;
 
       if (error) {
-        setScheduleError(buildScheduleErrorMessage("Loading schedules", error));
+        setScheduleError("일정을 불러오지 못했습니다.");
         logScheduleError("schedules select error", error, {
           table: "schedules",
           userId,
@@ -125,12 +120,12 @@ export function useSchedules(userId: string | undefined, selectedDate: string) {
 
   const addSchedule = useCallback(async () => {
     if (!userId) {
-      setScheduleError("Cannot save a schedule because no logged-in user was found.");
+      setScheduleError("로그인한 사용자를 찾지 못해 일정을 저장하지 못했습니다.");
       return;
     }
 
     if (!scheduleForm.startTime || !scheduleForm.endTime || !scheduleForm.title.trim()) {
-      setScheduleError("Enter a start time, end time, and title before saving.");
+      setScheduleError("시작 시간, 종료 시간, 제목을 입력해주세요.");
       return;
     }
 
@@ -152,7 +147,7 @@ export function useSchedules(userId: string | undefined, selectedDate: string) {
       .single();
 
     if (error) {
-      setScheduleError(buildScheduleErrorMessage("Saving schedule", error));
+      setScheduleError("일정을 저장하지 못했습니다.");
       logScheduleError("schedule insert error", error, {
         table: "schedules",
         payload: schedulePayload,
@@ -169,7 +164,7 @@ export function useSchedules(userId: string | undefined, selectedDate: string) {
   const deleteSchedule = useCallback(
     async (scheduleId: string) => {
       if (!userId) {
-        setScheduleError("Cannot delete a schedule because no logged-in user was found.");
+        setScheduleError("로그인한 사용자를 찾지 못해 일정을 삭제하지 못했습니다.");
         return;
       }
 
@@ -181,7 +176,7 @@ export function useSchedules(userId: string | undefined, selectedDate: string) {
         .eq("user_id", userId);
 
       if (error) {
-        setScheduleError(buildScheduleErrorMessage("Deleting schedule", error));
+        setScheduleError("일정을 삭제하지 못했습니다.");
         logScheduleError("schedule delete error", error, {
           table: "schedules",
           scheduleId,

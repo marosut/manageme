@@ -1,19 +1,29 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { TodoForm, TodoItem } from "../types/app";
 
-type TaskRow = {
-  id: string;
-  date: string;
-  title: string;
-  hasTime: boolean;
-  taskTime: string | null;
-  completed: boolean;
-  memo: string | null;
+type SupabaseResponseError = {
+  code?: string;
+  details?: string | null;
+  hint?: string | null;
+  message: string;
 };
 
-const taskColumns =
-  "id,date:task_date,title,hasTime:has_time,taskTime:task_time,completed,memo";
+type TodoRow = {
+  id: string;
+  date: string;
+  title?: string | null;
+  text?: string | null;
+  has_time?: boolean | null;
+  task_time?: string | null;
+  completed: boolean | null;
+  memo?: string | null;
+};
+
+type TodoColumnsMode = "extended" | "legacy";
+
+const extendedTodoColumns: string = "id,date,title,has_time,task_time,completed,memo";
+const legacyTodoColumns: string = "id,date,text,completed";
 
 const emptyTodoForm: TodoForm = {
   title: "",
@@ -22,16 +32,48 @@ const emptyTodoForm: TodoForm = {
   memo: "",
 };
 
-const toTimeValue = (value: string | null) => (value ? value.slice(0, 5) : null);
+const toTimeValue = (value: string | null | undefined) => (value ? value.slice(0, 5) : null);
 
-const mapTaskRow = (row: TaskRow): TodoItem => ({
+const kstDate = (date: Date) => {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 10);
+};
+
+const getTodoDateRange = (selectedDate: string) => {
+  const [year, month] = selectedDate.split("-").map(Number);
+  const startDate = new Date(year, month - 1, 1);
+  startDate.setDate(startDate.getDate() - 6);
+
+  const endDate = new Date(year, month, 0);
+
+  return {
+    startDate: kstDate(startDate),
+    endDate: kstDate(endDate),
+  };
+};
+
+const logTodoError = (
+  label: string,
+  error: SupabaseResponseError,
+  context: Record<string, unknown> = {}
+) => {
+  console.error(label, {
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+    code: error.code,
+    ...context,
+  });
+};
+
+const mapTodoRow = (row: TodoRow): TodoItem => ({
   id: row.id,
   date: row.date,
-  title: row.title,
-  hasTime: row.hasTime,
-  taskTime: toTimeValue(row.taskTime),
-  completed: row.completed,
-  memo: row.memo,
+  title: row.title ?? row.text ?? "",
+  hasTime: Boolean(row.has_time),
+  taskTime: toTimeValue(row.task_time),
+  completed: Boolean(row.completed),
+  memo: row.memo ?? null,
 });
 
 const sortTodos = (items: TodoItem[]) =>
@@ -41,12 +83,41 @@ const sortTodos = (items: TodoItem[]) =>
     return a.title.localeCompare(b.title);
   });
 
-export function useTodos(userId?: string) {
+const runTodoSelect = async (
+  userId: string,
+  startDate: string,
+  endDate: string,
+  mode: TodoColumnsMode
+) => {
+  let query = supabase
+    .from("todos")
+    .select(mode === "extended" ? extendedTodoColumns : legacyTodoColumns)
+    .eq("user_id", userId)
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .order("date", { ascending: true });
+
+  if (mode === "extended") {
+    query = query
+      .order("has_time", { ascending: false })
+      .order("task_time", { ascending: true, nullsFirst: false });
+  }
+
+  return query;
+};
+
+export function useTodos(userId: string | undefined, selectedDate: string) {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [todoForm, setTodoForm] = useState<TodoForm>(emptyTodoForm);
+  const [todoColumnsMode, setTodoColumnsMode] = useState<TodoColumnsMode>("extended");
   const [isLoadingTodos, setIsLoadingTodos] = useState(false);
   const [isSavingTodo, setIsSavingTodo] = useState(false);
   const [todoError, setTodoError] = useState<string | null>(null);
+  const selectedMonth = selectedDate.slice(0, 7);
+  const { startDate, endDate } = useMemo(
+    () => getTodoDateRange(`${selectedMonth}-01`),
+    [selectedMonth]
+  );
 
   useEffect(() => {
     if (!userId) return;
@@ -55,26 +126,45 @@ export function useTodos(userId?: string) {
 
     const fetchTodos = async () => {
       setIsLoadingTodos(true);
-      const { data, error } = await supabase
-        .from("tasks")
-        .select(taskColumns)
-        .eq("user_id", userId)
-        .order("task_date", { ascending: true })
-        .order("has_time", { ascending: false })
-        .order("task_time", { ascending: true, nullsFirst: false });
+
+      let mode = todoColumnsMode;
+      let {
+        data,
+        error,
+      }: { data: unknown; error: SupabaseResponseError | null } = await runTodoSelect(
+        userId,
+        startDate,
+        endDate,
+        mode
+      );
+
+      if (error && mode === "extended") {
+        logTodoError("todos extended select error, retrying legacy columns:", error, {
+          table: "todos",
+          userId,
+          startDate,
+          endDate,
+        });
+        mode = "legacy";
+        const fallbackResult = await runTodoSelect(userId, startDate, endDate, mode);
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      }
 
       if (!isMounted) return;
 
       if (error) {
-        setTodoError("Failed to load tasks.");
-        console.error("tasks select error:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
+        setTodoError("할 일을 불러오지 못했습니다.");
+        logTodoError("todos select error:", error, {
+          table: "todos",
+          userId,
+          startDate,
+          endDate,
+          mode,
         });
       } else {
-        setTodos(sortTodos(((data ?? []) as TaskRow[]).map(mapTaskRow)));
+        setTodoColumnsMode(mode);
+        setTodos(sortTodos(((data ?? []) as TodoRow[]).map(mapTodoRow)));
         setTodoError(null);
       }
 
@@ -86,12 +176,12 @@ export function useTodos(userId?: string) {
     return () => {
       isMounted = false;
     };
-  }, [userId]);
+  }, [endDate, startDate, todoColumnsMode, userId]);
 
   const addTodo = useCallback(
-    async (selectedDate: string) => {
+    async (todoDate: string) => {
       if (!userId) {
-        setTodoError("Cannot save a task because no logged-in user was found.");
+        setTodoError("로그인한 사용자를 찾지 못해 할 일을 저장하지 못했습니다.");
         return;
       }
 
@@ -99,82 +189,105 @@ export function useTodos(userId?: string) {
       if (!title) return;
 
       if (todoForm.hasTime && !todoForm.taskTime) {
-        setTodoError("Choose a time or turn off time scheduling.");
+        setTodoError("시간을 선택하거나 시간 지정을 해제해주세요.");
         return;
       }
 
-      const taskPayload = {
+      const extendedPayload = {
         user_id: userId,
-        task_date: selectedDate,
+        date: todoDate,
         title,
         has_time: todoForm.hasTime,
         task_time: todoForm.hasTime ? todoForm.taskTime : null,
         completed: false,
         memo: todoForm.memo.trim() || null,
       };
+      const legacyPayload = {
+        user_id: userId,
+        date: todoDate,
+        text: title,
+        completed: false,
+      };
 
       setIsSavingTodo(true);
-      const { data, error } = await supabase
-        .from("tasks")
-        .insert([taskPayload])
-        .select(taskColumns)
+
+      let mode = todoColumnsMode;
+      let {
+        data,
+        error,
+      }: { data: unknown; error: SupabaseResponseError | null } = await supabase
+        .from("todos")
+        .insert([mode === "extended" ? extendedPayload : legacyPayload])
+        .select(mode === "extended" ? extendedTodoColumns : legacyTodoColumns)
         .single();
 
+      if (error && mode === "extended") {
+        logTodoError("todo extended insert error, retrying legacy columns:", error, {
+          table: "todos",
+          payload: extendedPayload,
+        });
+        mode = "legacy";
+        const fallbackResult = await supabase
+          .from("todos")
+          .insert([legacyPayload])
+          .select(legacyTodoColumns)
+          .single();
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      }
+
       if (error) {
-        setTodoError("Failed to save task.");
-        console.error("task insert error:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-          payload: taskPayload,
+        setTodoError("할 일을 저장하지 못했습니다.");
+        logTodoError("todo insert error:", error, {
+          table: "todos",
+          mode,
         });
       } else if (data) {
-        setTodos((prev) => sortTodos([...prev, mapTaskRow(data as TaskRow)]));
+        setTodoColumnsMode(mode);
+        setTodos((prev) => sortTodos([...prev, mapTodoRow(data as TodoRow)]));
         setTodoForm(emptyTodoForm);
         setTodoError(null);
       }
 
       setIsSavingTodo(false);
     },
-    [todoForm, userId]
+    [todoColumnsMode, todoForm, userId]
   );
 
   const toggleTodo = useCallback(
     async (todoId: string) => {
       if (!userId) {
-        setTodoError("Cannot update a task because no logged-in user was found.");
+        setTodoError("로그인한 사용자를 찾지 못해 할 일을 수정하지 못했습니다.");
         return;
       }
 
       const currentTodo = todos.find((todo) => todo.id === todoId);
       if (!currentTodo) return;
 
-      const { data, error } = await supabase
-        .from("tasks")
+      const { error } = await supabase
+        .from("todos")
         .update({ completed: !currentTodo.completed })
         .eq("id", todoId)
-        .eq("user_id", userId)
-        .select(taskColumns)
-        .single();
+        .eq("user_id", userId);
 
       if (error) {
-        setTodoError("Failed to update task.");
-        console.error("task update error:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
+        setTodoError("할 일을 수정하지 못했습니다.");
+        logTodoError("todo update error:", error, {
+          table: "todos",
+          todoId,
+          userId,
         });
         return;
       }
 
-      if (data) {
-        setTodos((prev) =>
-          sortTodos(prev.map((todo) => (todo.id === todoId ? mapTaskRow(data as TaskRow) : todo)))
-        );
-        setTodoError(null);
-      }
+      setTodos((prev) =>
+        sortTodos(
+          prev.map((todo) =>
+            todo.id === todoId ? { ...todo, completed: !currentTodo.completed } : todo
+          )
+        )
+      );
+      setTodoError(null);
     },
     [todos, userId]
   );
@@ -182,23 +295,22 @@ export function useTodos(userId?: string) {
   const deleteTodo = useCallback(
     async (todoId: string) => {
       if (!userId) {
-        setTodoError("Cannot delete a task because no logged-in user was found.");
+        setTodoError("로그인한 사용자를 찾지 못해 할 일을 삭제하지 못했습니다.");
         return;
       }
 
       const { error } = await supabase
-        .from("tasks")
+        .from("todos")
         .delete()
         .eq("id", todoId)
         .eq("user_id", userId);
 
       if (error) {
-        setTodoError("Failed to delete task.");
-        console.error("task delete error:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
+        setTodoError("할 일을 삭제하지 못했습니다.");
+        logTodoError("todo delete error:", error, {
+          table: "todos",
+          todoId,
+          userId,
         });
         return;
       }

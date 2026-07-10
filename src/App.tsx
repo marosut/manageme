@@ -69,11 +69,9 @@ function AuthCallbackScreen({ authError }: { authError: string | null }) {
   return (
     <main className="auth-screen">
       <section className="auth-panel" aria-live="polite">
-        <p className="auth-kicker">Google login</p>
-        <h1 className="auth-title">Finishing sign in</h1>
-        <p className="auth-description">
-          We are checking your Google login and preparing your session.
-        </p>
+        <p className="auth-kicker">로그인 처리 중</p>
+        <h1 className="auth-title">Google 로그인을 완료하고 있습니다</h1>
+        <p className="auth-description">로그인 정보를 확인하고 있습니다.</p>
         {authError && <p className="auth-error">{authError}</p>}
       </section>
     </main>
@@ -102,7 +100,7 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
     isLoadingTodos,
     isSavingTodo,
     todoError,
-  } = useTodos(user.id);
+  } = useTodos(user.id, selectedDate);
   const {
     routines,
     routineName,
@@ -110,12 +108,11 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
     addRoutine,
     toggleRoutine,
     deleteRoutine,
-  } = useRoutines();
+    isLoadingRoutines,
+    isSavingRoutine,
+    routineError,
+  } = useRoutines(user.id);
 
-  const selectedSchedules = useMemo(
-    () => schedules,
-    [schedules]
-  );
   const selectedTodos = useMemo(
     () => todos.filter((todo) => todo.date === selectedDate),
     [todos, selectedDate]
@@ -137,10 +134,9 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
     const routineRate = selectedRoutines.length
       ? Math.round((doneRoutines / selectedRoutines.length) * 100)
       : 0;
-    const totalRate =
-      selectedTodos.length || selectedRoutines.length
-        ? Math.round((todoRate + routineRate) / 2)
-        : 0;
+    const totalItems = selectedTodos.length + selectedRoutines.length;
+    const completedItems = doneTodos + doneRoutines;
+    const totalRate = totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
 
     return { doneTodos, doneRoutines, todoRate, routineRate, totalRate };
   }, [selectedTodos, selectedRoutines, selectedDate]);
@@ -149,19 +145,13 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
     (date: string) => {
       const dayTodos = todos.filter((todo) => todo.date === date);
       const dayRoutines = routines.filter((routine) => routine.createdAt <= date);
+      const doneTodos = dayTodos.filter((todo) => todo.completed).length;
+      const doneRoutines = dayRoutines.filter((routine) => routine.completions[date]).length;
 
-      const todoRate = dayTodos.length
-        ? Math.round((dayTodos.filter((todo) => todo.completed).length / dayTodos.length) * 100)
-        : 0;
-      const routineRate = dayRoutines.length
-        ? Math.round(
-            (dayRoutines.filter((routine) => routine.completions[date]).length /
-              dayRoutines.length) *
-              100
-          )
-        : 0;
+      const totalItems = dayTodos.length + dayRoutines.length;
+      const completedItems = doneTodos + doneRoutines;
 
-      return dayTodos.length || dayRoutines.length ? Math.round((todoRate + routineRate) / 2) : 0;
+      return totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
     },
     [todos, routines]
   );
@@ -189,10 +179,6 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
       return { date: String(index + 1), rate: getRateByDate(date) };
     });
   }, [getRateByDate, selectedDate]);
-
-  const handleAddSchedule = useCallback(() => {
-    addSchedule();
-  }, [addSchedule]);
 
   const handleAddTodo = useCallback(() => {
     addTodo(selectedDate);
@@ -241,6 +227,9 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
             routines={selectedRoutines}
             routineName={routineName}
             selectedDate={selectedDate}
+            isLoading={isLoadingRoutines}
+            isSaving={isSavingRoutine}
+            error={routineError}
             onRoutineNameChange={setRoutineName}
             onAddRoutine={handleAddRoutine}
             onToggleRoutine={handleToggleRoutine}
@@ -250,13 +239,13 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
 
         <section className="grid gap-6 lg:grid-cols-2">
           <SchedulePanel
-            schedules={selectedSchedules}
+            schedules={schedules}
             scheduleForm={scheduleForm}
             isLoading={isLoadingSchedules}
             isSaving={isSavingSchedule}
             error={scheduleError}
             onScheduleFormChange={setScheduleForm}
-            onAddSchedule={handleAddSchedule}
+            onAddSchedule={addSchedule}
             onDeleteSchedule={deleteSchedule}
           />
           <Suspense

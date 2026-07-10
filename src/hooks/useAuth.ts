@@ -17,8 +17,6 @@ const getCallbackParams = () => {
   };
 };
 
-const formatAuthError = (message: string) => message.replace(/\+/g, " ").trim();
-
 export function useAuth() {
   const isAuthCallback = window.location.pathname === "/auth/callback";
   const [session, setSession] = useState<Session | null>(null);
@@ -45,7 +43,8 @@ export function useAuth() {
     const loadSession = async () => {
       if (isAuthCallback) {
         if (callbackError) {
-          setAuthError(formatAuthError(callbackError));
+          setAuthError("Google 로그인 중 오류가 발생했습니다.");
+          console.error("auth callback error:", callbackError.replace(/\+/g, " ").trim());
           setIsLoadingUser(false);
           return;
         }
@@ -56,7 +55,8 @@ export function useAuth() {
           if (!isMounted) return;
 
           if (exchangeError) {
-            setAuthError(formatAuthError(exchangeError.message));
+            setAuthError("Google 로그인을 완료하지 못했습니다.");
+            console.error("exchangeCodeForSession error:", exchangeError);
             setIsLoadingUser(false);
             return;
           }
