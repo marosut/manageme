@@ -8,9 +8,9 @@ create extension if not exists pgcrypto;
 create table if not exists public.schedules (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,
-  date date not null,
-  start_time time,
-  end_time time,
+  day_of_week int not null check (day_of_week between 0 and 6),
+  start_time time not null,
+  end_time time not null,
   title text not null,
   category text,
   memo text,
@@ -20,18 +20,21 @@ create table if not exists public.schedules (
 alter table public.schedules
   add constraint schedules_user_fk foreign key (user_id) references auth.users(id) on delete cascade;
 
--- Todos table
-create table if not exists public.todos (
+-- Tasks table
+create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,
-  date date not null,
-  text text not null,
-  completed boolean default false,
+  task_date date not null,
+  title text not null,
+  has_time boolean not null default false,
+  task_time time null,
+  completed boolean not null default false,
+  memo text,
   created_at timestamptz default now()
 );
 
-alter table public.todos
-  add constraint todos_user_fk foreign key (user_id) references auth.users(id) on delete cascade;
+alter table public.tasks
+  add constraint tasks_user_fk foreign key (user_id) references auth.users(id) on delete cascade;
 
 -- Routines table
 create table if not exists public.routines (
@@ -61,8 +64,8 @@ alter table public.routine_completions
 create unique index if not exists idx_unique_routine_completion on public.routine_completions(routine_id, user_id, date);
 
 -- Indexes for common queries
-create index if not exists idx_schedules_user_date on public.schedules (user_id, date);
-create index if not exists idx_todos_user_date on public.todos (user_id, date);
+create index if not exists idx_schedules_user_day_time on public.schedules (user_id, day_of_week, start_time);
+create index if not exists idx_tasks_user_date_time on public.tasks (user_id, task_date, has_time, task_time);
 create index if not exists idx_routines_user on public.routines (user_id);
 
 -- Enable Row Level Security and create policies so users can only access their own rows
@@ -73,12 +76,12 @@ create policy "schedules_insert" on public.schedules for insert with check (auth
 create policy "schedules_update" on public.schedules for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "schedules_delete" on public.schedules for delete using (auth.uid() = user_id);
 
--- Todos policies
-alter table public.todos enable row level security;
-create policy "todos_select" on public.todos for select using (auth.uid() = user_id);
-create policy "todos_insert" on public.todos for insert with check (auth.uid() = user_id);
-create policy "todos_update" on public.todos for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "todos_delete" on public.todos for delete using (auth.uid() = user_id);
+-- Tasks policies
+alter table public.tasks enable row level security;
+create policy "tasks_select" on public.tasks for select using (auth.uid() = user_id);
+create policy "tasks_insert" on public.tasks for insert with check (auth.uid() = user_id);
+create policy "tasks_update" on public.tasks for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "tasks_delete" on public.tasks for delete using (auth.uid() = user_id);
 
 -- Routines policies
 alter table public.routines enable row level security;
