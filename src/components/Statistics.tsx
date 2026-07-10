@@ -22,8 +22,8 @@ export const Statistics = memo(function Statistics({ weeklyData, monthlyData }: 
   return (
     <>
       <Card title="이번 주 달성률 그래프">
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-72 min-h-72 min-w-0 w-full">
+          <ResponsiveContainer width="100%" height={288} minWidth={0} minHeight={288}>
             <BarChart data={weeklyData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
@@ -36,8 +36,8 @@ export const Statistics = memo(function Statistics({ weeklyData, monthlyData }: 
       </Card>
 
       <Card title="이번 달 달성률 그래프">
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-72 min-h-72 min-w-0 w-full">
+          <ResponsiveContainer width="100%" height={288} minWidth={0} minHeight={288}>
             <LineChart data={monthlyData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />

@@ -12,18 +12,11 @@ type SupabaseResponseError = {
 type TodoRow = {
   id: string;
   date: string;
-  title?: string | null;
-  text?: string | null;
-  has_time?: boolean | null;
-  task_time?: string | null;
+  text: string | null;
   completed: boolean | null;
-  memo?: string | null;
 };
 
-type TodoColumnsMode = "extended" | "legacy";
-
-const extendedTodoColumns: string = "id,date,title,has_time,task_time,completed,memo";
-const legacyTodoColumns: string = "id,date,text,completed";
+const todoColumns: string = "id,date,text,completed";
 
 const emptyTodoForm: TodoForm = {
   title: "",
@@ -31,8 +24,6 @@ const emptyTodoForm: TodoForm = {
   taskTime: "",
   memo: "",
 };
-
-const toTimeValue = (value: string | null | undefined) => (value ? value.slice(0, 5) : null);
 
 const kstDate = (date: Date) => {
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
@@ -69,47 +60,19 @@ const logTodoError = (
 const mapTodoRow = (row: TodoRow): TodoItem => ({
   id: row.id,
   date: row.date,
-  title: row.title ?? row.text ?? "",
-  hasTime: Boolean(row.has_time),
-  taskTime: toTimeValue(row.task_time),
+  title: row.text ?? "",
+  hasTime: false,
+  taskTime: null,
   completed: Boolean(row.completed),
-  memo: row.memo ?? null,
+  memo: null,
 });
 
 const sortTodos = (items: TodoItem[]) =>
-  [...items].sort((a, b) => {
-    if (a.hasTime !== b.hasTime) return a.hasTime ? -1 : 1;
-    if (a.hasTime && b.hasTime) return (a.taskTime ?? "").localeCompare(b.taskTime ?? "");
-    return a.title.localeCompare(b.title);
-  });
-
-const runTodoSelect = async (
-  userId: string,
-  startDate: string,
-  endDate: string,
-  mode: TodoColumnsMode
-) => {
-  let query = supabase
-    .from("todos")
-    .select(mode === "extended" ? extendedTodoColumns : legacyTodoColumns)
-    .eq("user_id", userId)
-    .gte("date", startDate)
-    .lte("date", endDate)
-    .order("date", { ascending: true });
-
-  if (mode === "extended") {
-    query = query
-      .order("has_time", { ascending: false })
-      .order("task_time", { ascending: true, nullsFirst: false });
-  }
-
-  return query;
-};
+  [...items].sort((a, b) => a.title.localeCompare(b.title));
 
 export function useTodos(userId: string | undefined, selectedDate: string) {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [todoForm, setTodoForm] = useState<TodoForm>(emptyTodoForm);
-  const [todoColumnsMode, setTodoColumnsMode] = useState<TodoColumnsMode>("extended");
   const [isLoadingTodos, setIsLoadingTodos] = useState(false);
   const [isSavingTodo, setIsSavingTodo] = useState(false);
   const [todoError, setTodoError] = useState<string | null>(null);
@@ -127,29 +90,14 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
     const fetchTodos = async () => {
       setIsLoadingTodos(true);
 
-      let mode = todoColumnsMode;
-      let {
-        data,
-        error,
-      }: { data: unknown; error: SupabaseResponseError | null } = await runTodoSelect(
-        userId,
-        startDate,
-        endDate,
-        mode
-      );
-
-      if (error && mode === "extended") {
-        logTodoError("todos extended select error, retrying legacy columns:", error, {
-          table: "todos",
-          userId,
-          startDate,
-          endDate,
-        });
-        mode = "legacy";
-        const fallbackResult = await runTodoSelect(userId, startDate, endDate, mode);
-        data = fallbackResult.data;
-        error = fallbackResult.error;
-      }
+      const { data, error } = await supabase
+        .from("todos")
+        .select(todoColumns)
+        .eq("user_id", userId)
+        .gte("date", startDate)
+        .lte("date", endDate)
+        .order("date", { ascending: true })
+        .order("text", { ascending: true });
 
       if (!isMounted) return;
 
@@ -160,11 +108,9 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
           userId,
           startDate,
           endDate,
-          mode,
         });
       } else {
-        setTodoColumnsMode(mode);
-        setTodos(sortTodos(((data ?? []) as TodoRow[]).map(mapTodoRow)));
+        setTodos(sortTodos(((data ?? []) as unknown as TodoRow[]).map(mapTodoRow)));
         setTodoError(null);
       }
 
@@ -176,7 +122,7 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
     return () => {
       isMounted = false;
     };
-  }, [endDate, startDate, todoColumnsMode, userId]);
+  }, [endDate, startDate, userId]);
 
   const addTodo = useCallback(
     async (todoDate: string) => {
@@ -185,73 +131,39 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
         return;
       }
 
-      const title = todoForm.title.trim();
-      if (!title) return;
+      const text = todoForm.title.trim();
+      if (!text) return;
 
-      if (todoForm.hasTime && !todoForm.taskTime) {
-        setTodoError("시간을 선택하거나 시간 지정을 해제해주세요.");
-        return;
-      }
-
-      const extendedPayload = {
+      const todoPayload = {
         user_id: userId,
         date: todoDate,
-        title,
-        has_time: todoForm.hasTime,
-        task_time: todoForm.hasTime ? todoForm.taskTime : null,
-        completed: false,
-        memo: todoForm.memo.trim() || null,
-      };
-      const legacyPayload = {
-        user_id: userId,
-        date: todoDate,
-        text: title,
+        text,
         completed: false,
       };
 
       setIsSavingTodo(true);
 
-      let mode = todoColumnsMode;
-      let {
-        data,
-        error,
-      }: { data: unknown; error: SupabaseResponseError | null } = await supabase
+      const { data, error } = await supabase
         .from("todos")
-        .insert([mode === "extended" ? extendedPayload : legacyPayload])
-        .select(mode === "extended" ? extendedTodoColumns : legacyTodoColumns)
+        .insert([todoPayload])
+        .select(todoColumns)
         .single();
-
-      if (error && mode === "extended") {
-        logTodoError("todo extended insert error, retrying legacy columns:", error, {
-          table: "todos",
-          payload: extendedPayload,
-        });
-        mode = "legacy";
-        const fallbackResult = await supabase
-          .from("todos")
-          .insert([legacyPayload])
-          .select(legacyTodoColumns)
-          .single();
-        data = fallbackResult.data;
-        error = fallbackResult.error;
-      }
 
       if (error) {
         setTodoError("할 일을 저장하지 못했습니다.");
         logTodoError("todo insert error:", error, {
           table: "todos",
-          mode,
+          payload: todoPayload,
         });
       } else if (data) {
-        setTodoColumnsMode(mode);
-        setTodos((prev) => sortTodos([...prev, mapTodoRow(data as TodoRow)]));
+        setTodos((prev) => sortTodos([...prev, mapTodoRow(data as unknown as TodoRow)]));
         setTodoForm(emptyTodoForm);
         setTodoError(null);
       }
 
       setIsSavingTodo(false);
     },
-    [todoColumnsMode, todoForm, userId]
+    [todoForm.title, userId]
   );
 
   const toggleTodo = useCallback(

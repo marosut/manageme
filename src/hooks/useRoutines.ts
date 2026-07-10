@@ -11,8 +11,9 @@ type SupabaseResponseError = {
 
 type RoutineRow = {
   id: string;
-  name: string;
-  createdAt: string;
+  title: string;
+  description: string | null;
+  frequency: string | null;
 };
 
 type RoutineCompletionRow = {
@@ -22,7 +23,7 @@ type RoutineCompletionRow = {
   completedAt: string | null;
 };
 
-const routineColumns = "id,name,createdAt:created_at";
+const routineColumns = "id,title,description,frequency";
 const routineCompletionColumns =
   "id,routineId:routine_id,completedDate:completed_date,completedAt:completed_at";
 
@@ -39,8 +40,6 @@ const logRoutineError = (
     ...context,
   });
 };
-
-const toDateValue = (value: string) => value.slice(0, 10);
 
 const sortRoutines = (items: RoutineItem[]) =>
   [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.name.localeCompare(b.name));
@@ -63,8 +62,8 @@ const mapRoutineRows = (
   return sortRoutines(
     routineRows.map((routine) => ({
       id: routine.id,
-      name: routine.name,
-      createdAt: toDateValue(routine.createdAt),
+      name: routine.title,
+      createdAt: "0000-01-01",
       completions: completionMap[routine.id] ?? {},
     }))
   );
@@ -89,8 +88,7 @@ export function useRoutines(userId?: string) {
         .from("routines")
         .select(routineColumns)
         .eq("user_id", userId)
-        .order("created_at", { ascending: true })
-        .order("name", { ascending: true });
+        .order("title", { ascending: true });
 
       if (!isMounted) return;
 
@@ -149,8 +147,9 @@ export function useRoutines(userId?: string) {
 
       const routinePayload = {
         user_id: userId,
-        name,
-        created_at: selectedDate,
+        title: name,
+        description: "",
+        frequency: "daily",
       };
 
       setIsSavingRoutine(true);
@@ -173,8 +172,8 @@ export function useRoutines(userId?: string) {
             ...prev,
             {
               id: routine.id,
-              name: routine.name,
-              createdAt: toDateValue(routine.createdAt),
+              name: routine.title,
+              createdAt: selectedDate,
               completions: {},
             },
           ])
