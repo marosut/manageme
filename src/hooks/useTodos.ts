@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { TodoForm, TodoItem } from "../types/app";
+import { kstDate } from "../utils/date";
 
 type SupabaseResponseError = {
   code?: string;
@@ -12,22 +13,21 @@ type SupabaseResponseError = {
 type TodoRow = {
   id: string;
   date: string;
+  title: string | null;
   text: string | null;
+  has_time: boolean | null;
+  task_time: string | null;
   completed: boolean | null;
+  memo: string | null;
 };
 
-const todoColumns: string = "id,date,text,completed";
+const todoColumns: string = "id,date,title,text,has_time,task_time,completed,memo";
 
 const emptyTodoForm: TodoForm = {
   title: "",
   hasTime: false,
   taskTime: "",
   memo: "",
-};
-
-const kstDate = (date: Date) => {
-  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-  return kst.toISOString().slice(0, 10);
 };
 
 const getTodoDateRange = (selectedDate: string) => {
@@ -60,15 +60,19 @@ const logTodoError = (
 const mapTodoRow = (row: TodoRow): TodoItem => ({
   id: row.id,
   date: row.date,
-  title: row.text ?? "",
-  hasTime: false,
-  taskTime: null,
+  title: row.title ?? row.text ?? "",
+  hasTime: Boolean(row.has_time),
+  taskTime: row.task_time ? row.task_time.slice(0, 5) : null,
   completed: Boolean(row.completed),
-  memo: null,
+  memo: row.memo ?? null,
 });
 
 const sortTodos = (items: TodoItem[]) =>
-  [...items].sort((a, b) => a.title.localeCompare(b.title));
+  [...items].sort((a, b) => {
+    if (a.hasTime !== b.hasTime) return a.hasTime ? -1 : 1;
+    if (a.hasTime && b.hasTime) return (a.taskTime ?? "").localeCompare(b.taskTime ?? "");
+    return a.title.localeCompare(b.title);
+  });
 
 export function useTodos(userId: string | undefined, selectedDate: string) {
   const [todos, setTodos] = useState<TodoItem[]>([]);
@@ -97,7 +101,9 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
         .gte("date", startDate)
         .lte("date", endDate)
         .order("date", { ascending: true })
-        .order("text", { ascending: true });
+        .order("has_time", { ascending: false })
+        .order("task_time", { ascending: true, nullsFirst: false })
+        .order("title", { ascending: true });
 
       if (!isMounted) return;
 
@@ -125,23 +131,55 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
   }, [endDate, startDate, userId]);
 
   const addTodo = useCallback(
-    async (todoDate: string) => {
-      if (!userId) {
-        setTodoError("로그인한 사용자를 찾지 못해 할 일을 저장하지 못했습니다.");
+    async (todoDate: string | Date) => {
+      if (isSavingTodo) return;
+
+      setTodoError(null);
+
+      const title = todoForm.title.trim();
+      if (!title) return;
+
+      if (todoForm.hasTime && !todoForm.taskTime) {
+        setTodoError("시간을 선택하거나 시간 지정을 해제해주세요.");
         return;
       }
 
-      const text = todoForm.title.trim();
-      if (!text) return;
+      setIsSavingTodo(true);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        console.error("Todo auth user error:", userError);
+        setTodoError("로그인이 필요합니다.");
+        setIsSavingTodo(false);
+        return;
+      }
+
+      if (userId && user.id !== userId) {
+        console.error("Todo user mismatch:", {
+          authUserId: user.id,
+          appUserId: userId,
+        });
+        setTodoError("로그인 정보를 다시 확인해주세요.");
+        setIsSavingTodo(false);
+        return;
+      }
+
+      const date = todoDate instanceof Date ? kstDate(todoDate) : todoDate;
 
       const todoPayload = {
-        user_id: userId,
-        date: todoDate,
-        text,
+        user_id: user.id,
+        date,
+        title,
+        text: title,
+        has_time: todoForm.hasTime,
+        task_time: todoForm.hasTime ? todoForm.taskTime : null,
         completed: false,
+        memo: todoForm.memo.trim() || null,
       };
-
-      setIsSavingTodo(true);
 
       const { data, error } = await supabase
         .from("todos")
@@ -150,11 +188,11 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
         .single();
 
       if (error) {
-        setTodoError("할 일을 저장하지 못했습니다.");
         logTodoError("todo insert error:", error, {
           table: "todos",
           payload: todoPayload,
         });
+        setTodoError(`할 일을 저장하지 못했습니다: ${error.message}`);
       } else if (data) {
         setTodos((prev) => sortTodos([...prev, mapTodoRow(data as unknown as TodoRow)]));
         setTodoForm(emptyTodoForm);
@@ -163,7 +201,7 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
 
       setIsSavingTodo(false);
     },
-    [todoForm.title, userId]
+    [isSavingTodo, todoForm, userId]
   );
 
   const toggleTodo = useCallback(

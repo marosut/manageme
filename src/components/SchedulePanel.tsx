@@ -25,18 +25,18 @@ export const SchedulePanel = memo(function SchedulePanel({
 }: SchedulePanelProps) {
   return (
     <Card title="오늘 시간표">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(10rem,1.4fr)_minmax(9rem,1fr)_minmax(5rem,auto)]">
         <input
           type="time"
           value={scheduleForm.startTime}
           onChange={(event) => onScheduleFormChange({ ...scheduleForm, startTime: event.target.value })}
-          className="rounded-xl border px-3 py-2"
+          className="min-w-32 rounded-xl border px-3 py-2"
         />
         <input
           type="time"
           value={scheduleForm.endTime}
           onChange={(event) => onScheduleFormChange({ ...scheduleForm, endTime: event.target.value })}
-          className="rounded-xl border px-3 py-2"
+          className="min-w-32 rounded-xl border px-3 py-2"
         />
         <input
           value={scheduleForm.title}
@@ -54,7 +54,7 @@ export const SchedulePanel = memo(function SchedulePanel({
           type="button"
           onClick={onAddSchedule}
           disabled={isSaving}
-          className="rounded-xl bg-slate-900 px-4 py-2 text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="min-w-20 whitespace-nowrap rounded-xl bg-slate-900 px-4 py-2 text-white disabled:cursor-not-allowed disabled:bg-slate-400"
         >
           {isSaving ? "저장 중" : "추가"}
         </button>

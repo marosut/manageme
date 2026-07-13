@@ -129,6 +129,11 @@ export function useSchedules(userId: string | undefined, selectedDate: string) {
       return;
     }
 
+    if (scheduleForm.endTime <= scheduleForm.startTime) {
+      setScheduleError("종료 시간은 시작 시간보다 늦어야 합니다.");
+      return;
+    }
+
     const schedulePayload = {
       user_id: userId,
       day_of_week: selectedDayOfWeek,
