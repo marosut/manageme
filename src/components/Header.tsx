@@ -1,24 +1,26 @@
 import { memo } from "react";
+import type { TodoItem } from "../types/app";
 import { kstTodayText } from "../utils/date";
+import { DailyBriefing } from "./DailyBriefing";
 
 type HeaderProps = {
+  todos: TodoItem[];
   selectedDate: string;
-  onSelectedDateChange: (date: string) => void;
   isLoadingUser: boolean;
   authError: string | null;
   onSignOut: () => Promise<void>;
 };
 
 export const Header = memo(function Header({
+  todos,
   selectedDate,
-  onSelectedDateChange,
   isLoadingUser,
   authError,
   onSignOut,
 }: HeaderProps) {
   return (
     <header className="rounded-3xl bg-slate-900 p-5 text-white shadow sm:p-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="text-2xl font-black sm:text-3xl">김주완 일정관리</h1>
           <p className="mt-2 text-slate-300">KST 기준 오늘 날짜: {kstTodayText()}</p>
@@ -29,19 +31,7 @@ export const Header = memo(function Header({
           )}
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div>
-            <label className="mb-1 block text-sm text-slate-300" htmlFor="selected-date">
-              날짜 선택
-            </label>
-            <input
-              id="selected-date"
-              type="date"
-              value={selectedDate}
-              onChange={(event) => onSelectedDateChange(event.target.value)}
-              className="w-full rounded-xl px-4 py-2 text-slate-900 md:w-auto"
-            />
-          </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <button
             type="button"
             onClick={onSignOut}
@@ -51,6 +41,7 @@ export const Header = memo(function Header({
           </button>
         </div>
       </div>
+      <DailyBriefing todos={todos} selectedDate={selectedDate} />
     </header>
   );
 });

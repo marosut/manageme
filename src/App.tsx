@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { AchievementCard } from "./components/AchievementCard";
 import { Header } from "./components/Header";
+import { MiniCalendar } from "./components/MiniCalendar";
 import { RoutineList } from "./components/RoutineList";
 import { SchedulePanel } from "./components/SchedulePanel";
 import { TodoList } from "./components/TodoList";
@@ -9,7 +10,7 @@ import { useRoutines } from "./hooks/useRoutines";
 import { useSchedules } from "./hooks/useSchedules";
 import { useTodos } from "./hooks/useTodos";
 import type { Achievement, ChartPoint, UserInfo } from "./types/app";
-import { kstDate } from "./utils/date";
+import { kstDate, selectedDateLabel } from "./utils/date";
 
 const Statistics = lazy(() =>
   import("./components/Statistics").then((module) => ({ default: module.Statistics }))
@@ -80,6 +81,7 @@ function AuthCallbackScreen({ authError }: { authError: string | null }) {
 
 function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppProps) {
   const [selectedDate, setSelectedDate] = useState(() => kstDate());
+  const dateLabel = selectedDateLabel(selectedDate);
   const {
     schedules,
     scheduleForm,
@@ -100,7 +102,7 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
     isLoadingTodos,
     isSavingTodo,
     todoError,
-  } = useTodos(user.id, selectedDate);
+  } = useTodos(user.id);
   const {
     routines,
     routineName,
@@ -120,6 +122,18 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
   const selectedRoutines = useMemo(
     () => routines.filter((routine) => routine.createdAt <= selectedDate),
     [routines, selectedDate]
+  );
+  const todoSummaryByDate = useMemo(
+    () =>
+      todos.reduce<Record<string, { total: number; completed: number }>>((summary, todo) => {
+        const current = summary[todo.date] ?? { total: 0, completed: 0 };
+        summary[todo.date] = {
+          total: current.total + 1,
+          completed: current.completed + (todo.completed ? 1 : 0),
+        };
+        return summary;
+      }, {}),
+    [todos]
   );
 
   const achievement = useMemo<Achievement>(() => {
@@ -198,21 +212,30 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
   return (
     <main className="min-h-screen bg-slate-100 p-3 sm:p-4 md:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
-        <Header
-          selectedDate={selectedDate}
-          onSelectedDateChange={setSelectedDate}
-          isLoadingUser={isLoadingUser}
-          authError={authError}
-          onSignOut={onSignOut}
-        />
+        <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <Header
+            todos={todos}
+            selectedDate={selectedDate}
+            isLoadingUser={isLoadingUser}
+            authError={authError}
+            onSignOut={onSignOut}
+          />
+          <MiniCalendar
+            selectedDate={selectedDate}
+            todoSummaryByDate={todoSummaryByDate}
+            onSelectedDateChange={setSelectedDate}
+          />
+        </section>
 
         <section className="grid min-w-0 gap-6 lg:grid-cols-3">
           <AchievementCard
+            dateLabel={dateLabel}
             achievement={achievement}
             todoCount={selectedTodos.length}
             routineCount={selectedRoutines.length}
           />
           <TodoList
+            dateLabel={dateLabel}
             todos={selectedTodos}
             todoForm={todoForm}
             isLoading={isLoadingTodos}
@@ -224,6 +247,7 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
             onDeleteTodo={deleteTodo}
           />
           <RoutineList
+            dateLabel={dateLabel}
             routines={selectedRoutines}
             routineName={routineName}
             selectedDate={selectedDate}

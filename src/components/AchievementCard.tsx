@@ -4,18 +4,20 @@ import { Card } from "./ui/Card";
 import { Info } from "./ui/Info";
 
 type AchievementCardProps = {
+  dateLabel: string;
   achievement: Achievement;
   todoCount: number;
   routineCount: number;
 };
 
 export const AchievementCard = memo(function AchievementCard({
+  dateLabel,
   achievement,
   todoCount,
   routineCount,
 }: AchievementCardProps) {
   return (
-    <Card title="오늘 달성률">
+    <Card title={`${dateLabel} 달성률`}>
       <div className="text-center">
         <p className="text-5xl font-black sm:text-6xl">{achievement.totalRate}%</p>
         <p className="text-slate-500">전체 달성률</p>

@@ -21,3 +21,17 @@ export const kstTodayText = () =>
     day: "numeric",
     weekday: "long",
   }).format(new Date());
+
+export const kstTime = (date = new Date()) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+
+export const selectedDateLabel = (date: string, today = kstDate()) => {
+  if (date === today) return "오늘";
+  const [, month, day] = date.split("-").map(Number);
+  return `${month}/${day}`;
+};

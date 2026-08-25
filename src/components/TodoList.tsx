@@ -3,6 +3,7 @@ import type { TodoForm, TodoItem } from "../types/app";
 import { Card } from "./ui/Card";
 
 type TodoListProps = {
+  dateLabel: string;
   todos: TodoItem[];
   todoForm: TodoForm;
   isLoading: boolean;
@@ -15,6 +16,7 @@ type TodoListProps = {
 };
 
 export const TodoList = memo(function TodoList({
+  dateLabel,
   todos,
   todoForm,
   isLoading,
@@ -59,7 +61,7 @@ export const TodoList = memo(function TodoList({
   );
 
   return (
-    <Card title="오늘 할 일">
+    <Card title={`${dateLabel} 할 일`}>
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
@@ -112,7 +114,7 @@ export const TodoList = memo(function TodoList({
       <div className="mt-4 space-y-4">
         {isLoading && <p className="rounded-xl bg-slate-50 p-3 text-slate-500">불러오는 중입니다.</p>}
         {!isLoading && todos.length === 0 && (
-          <p className="rounded-xl bg-slate-50 p-3 text-slate-500">오늘 등록된 할 일이 없습니다.</p>
+          <p className="rounded-xl bg-slate-50 p-3 text-slate-500">{dateLabel} 등록된 할 일이 없습니다.</p>
         )}
         {timedTodos.length > 0 && (
           <section className="space-y-2">

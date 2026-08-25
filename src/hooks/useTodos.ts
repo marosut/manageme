@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { TodoForm, TodoItem } from "../types/app";
 import { kstDate } from "../utils/date";
@@ -28,19 +28,6 @@ const emptyTodoForm: TodoForm = {
   hasTime: false,
   taskTime: "",
   memo: "",
-};
-
-const getTodoDateRange = (selectedDate: string) => {
-  const [year, month] = selectedDate.split("-").map(Number);
-  const startDate = new Date(year, month - 1, 1);
-  startDate.setDate(startDate.getDate() - 6);
-
-  const endDate = new Date(year, month, 0);
-
-  return {
-    startDate: kstDate(startDate),
-    endDate: kstDate(endDate),
-  };
 };
 
 const logTodoError = (
@@ -74,18 +61,12 @@ const sortTodos = (items: TodoItem[]) =>
     return a.title.localeCompare(b.title);
   });
 
-export function useTodos(userId: string | undefined, selectedDate: string) {
+export function useTodos(userId: string | undefined) {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [todoForm, setTodoForm] = useState<TodoForm>(emptyTodoForm);
   const [isLoadingTodos, setIsLoadingTodos] = useState(false);
   const [isSavingTodo, setIsSavingTodo] = useState(false);
   const [todoError, setTodoError] = useState<string | null>(null);
-  const selectedMonth = selectedDate.slice(0, 7);
-  const { startDate, endDate } = useMemo(
-    () => getTodoDateRange(`${selectedMonth}-01`),
-    [selectedMonth]
-  );
-
   useEffect(() => {
     if (!userId) return;
 
@@ -98,8 +79,6 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
         .from("todos")
         .select(todoColumns)
         .eq("user_id", userId)
-        .gte("date", startDate)
-        .lte("date", endDate)
         .order("date", { ascending: true })
         .order("has_time", { ascending: false })
         .order("task_time", { ascending: true, nullsFirst: false })
@@ -112,8 +91,6 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
         logTodoError("todos select error:", error, {
           table: "todos",
           userId,
-          startDate,
-          endDate,
         });
       } else {
         setTodos(sortTodos(((data ?? []) as unknown as TodoRow[]).map(mapTodoRow)));
@@ -128,7 +105,7 @@ export function useTodos(userId: string | undefined, selectedDate: string) {
     return () => {
       isMounted = false;
     };
-  }, [endDate, startDate, userId]);
+  }, [userId]);
 
   const addTodo = useCallback(
     async (todoDate: string | Date) => {

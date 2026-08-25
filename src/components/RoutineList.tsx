@@ -3,6 +3,7 @@ import type { RoutineItem } from "../types/app";
 import { Card } from "./ui/Card";
 
 type RoutineListProps = {
+  dateLabel: string;
   routines: RoutineItem[];
   routineName: string;
   selectedDate: string;
@@ -16,6 +17,7 @@ type RoutineListProps = {
 };
 
 export const RoutineList = memo(function RoutineList({
+  dateLabel,
   routines,
   routineName,
   selectedDate,
@@ -28,7 +30,7 @@ export const RoutineList = memo(function RoutineList({
   onDeleteRoutine,
 }: RoutineListProps) {
   return (
-    <Card title="오늘 루틴">
+    <Card title={`${dateLabel} 루틴`}>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           value={routineName}
@@ -51,7 +53,7 @@ export const RoutineList = memo(function RoutineList({
       <div className="mt-4 space-y-2">
         {isLoading && <p className="rounded-xl bg-slate-50 p-3 text-slate-500">불러오는 중입니다.</p>}
         {!isLoading && routines.length === 0 && (
-          <p className="rounded-xl bg-slate-50 p-3 text-slate-500">오늘 표시할 루틴이 없습니다.</p>
+          <p className="rounded-xl bg-slate-50 p-3 text-slate-500">{dateLabel} 표시할 루틴이 없습니다.</p>
         )}
         {routines.map((routine) => {
           const isCompleted = Boolean(routine.completions[selectedDate]);
