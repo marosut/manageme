@@ -206,7 +206,7 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
           onSignOut={onSignOut}
         />
 
-        <section className="grid gap-6 lg:grid-cols-3">
+        <section className="grid min-w-0 gap-6 lg:grid-cols-3">
           <AchievementCard
             achievement={achievement}
             todoCount={selectedTodos.length}
@@ -237,7 +237,7 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
           />
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-2">
+        <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
           <SchedulePanel
             schedules={schedules}
             scheduleForm={scheduleForm}
@@ -248,15 +248,17 @@ function ScheduleApp({ user, isLoadingUser, authError, onSignOut }: ScheduleAppP
             onAddSchedule={addSchedule}
             onDeleteSchedule={deleteSchedule}
           />
-          <Suspense
-            fallback={
-              <section className="rounded-3xl bg-white p-4 text-slate-500 shadow-sm ring-1 ring-slate-200 sm:p-5">
-                그래프를 불러오는 중입니다.
-              </section>
-            }
-          >
-            <Statistics weeklyData={weeklyData} monthlyData={monthlyData} />
-          </Suspense>
+          <div className="min-w-0 overflow-hidden">
+            <Suspense
+              fallback={
+                <section className="w-full min-w-0 overflow-hidden rounded-3xl bg-white p-4 text-slate-500 shadow-sm ring-1 ring-slate-200 sm:p-5">
+                  그래프를 불러오는 중입니다.
+                </section>
+              }
+            >
+              <Statistics weeklyData={weeklyData} monthlyData={monthlyData} />
+            </Suspense>
+          </div>
         </section>
       </div>
     </main>

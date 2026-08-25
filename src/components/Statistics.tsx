@@ -20,9 +20,9 @@ type StatisticsProps = {
 
 export const Statistics = memo(function Statistics({ weeklyData, monthlyData }: StatisticsProps) {
   return (
-    <>
+    <div className="min-w-0 space-y-6 overflow-hidden">
       <Card title="이번 주 달성률 그래프">
-        <div className="h-72 min-h-72 min-w-0 w-full">
+        <div className="h-72 min-h-72 w-full min-w-0 overflow-hidden">
           <ResponsiveContainer width="100%" height={288} minWidth={0} minHeight={288}>
             <BarChart data={weeklyData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -36,7 +36,7 @@ export const Statistics = memo(function Statistics({ weeklyData, monthlyData }: 
       </Card>
 
       <Card title="이번 달 달성률 그래프">
-        <div className="h-72 min-h-72 min-w-0 w-full">
+        <div className="h-72 min-h-72 w-full min-w-0 overflow-hidden">
           <ResponsiveContainer width="100%" height={288} minWidth={0} minHeight={288}>
             <LineChart data={monthlyData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -48,6 +48,6 @@ export const Statistics = memo(function Statistics({ weeklyData, monthlyData }: 
           </ResponsiveContainer>
         </div>
       </Card>
-    </>
+    </div>
   );
 });

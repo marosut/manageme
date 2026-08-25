@@ -25,36 +25,36 @@ export const SchedulePanel = memo(function SchedulePanel({
 }: SchedulePanelProps) {
   return (
     <Card title="오늘 시간표">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(10rem,1.4fr)_minmax(9rem,1fr)_minmax(5rem,auto)]">
+      <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[7.5rem_7.5rem_minmax(10rem,1.2fr)_minmax(8rem,1fr)_auto]">
         <input
           type="time"
           value={scheduleForm.startTime}
           onChange={(event) => onScheduleFormChange({ ...scheduleForm, startTime: event.target.value })}
-          className="min-w-32 rounded-xl border px-3 py-2"
+          className="w-full min-w-0 max-w-full rounded-xl border px-3 py-2"
         />
         <input
           type="time"
           value={scheduleForm.endTime}
           onChange={(event) => onScheduleFormChange({ ...scheduleForm, endTime: event.target.value })}
-          className="min-w-32 rounded-xl border px-3 py-2"
+          className="w-full min-w-0 max-w-full rounded-xl border px-3 py-2"
         />
         <input
           value={scheduleForm.title}
           onChange={(event) => onScheduleFormChange({ ...scheduleForm, title: event.target.value })}
           placeholder="제목"
-          className="rounded-xl border px-3 py-2"
+          className="w-full min-w-0 max-w-full rounded-xl border px-3 py-2"
         />
         <input
           value={scheduleForm.category}
           onChange={(event) => onScheduleFormChange({ ...scheduleForm, category: event.target.value })}
           placeholder="카테고리"
-          className="rounded-xl border px-3 py-2"
+          className="w-full min-w-0 max-w-full rounded-xl border px-3 py-2"
         />
         <button
           type="button"
           onClick={onAddSchedule}
           disabled={isSaving}
-          className="min-w-20 whitespace-nowrap rounded-xl bg-slate-900 px-4 py-2 text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="w-full min-w-0 max-w-full whitespace-nowrap rounded-xl bg-slate-900 px-4 py-2 text-white disabled:cursor-not-allowed disabled:bg-slate-400 sm:col-span-2 xl:col-span-1 xl:w-auto xl:justify-self-end"
         >
           {isSaving ? "저장 중" : "추가"}
         </button>
@@ -64,7 +64,7 @@ export const SchedulePanel = memo(function SchedulePanel({
         value={scheduleForm.memo}
         onChange={(event) => onScheduleFormChange({ ...scheduleForm, memo: event.target.value })}
         placeholder="메모"
-        className="mt-2 w-full rounded-xl border px-3 py-2"
+        className="mt-2 w-full min-w-0 max-w-full resize-y rounded-xl border px-3 py-2"
       />
 
       {error && <p className="mt-3 whitespace-pre-line text-sm text-red-500">{error}</p>}
